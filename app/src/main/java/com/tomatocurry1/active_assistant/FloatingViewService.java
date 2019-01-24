@@ -45,6 +45,7 @@ public class FloatingViewService extends Service {
     private Intent speechIntent;
     private SpeechRecognizer recognizer;
     private RecognitionListener listener;
+    private CallManager callManager = new CallManager();
 
 
     class GravityController  implements Runnable{
@@ -200,6 +201,8 @@ public class FloatingViewService extends Service {
     private void initSpeechToText(){
         speechIntent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
         speechIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+
+        speechIntent.putExtra(RecognizerIntent.EXTRA_CONFIDENCE_SCORES, true);
         speechIntent.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, "com.tomatocurry1.active_assistant");
 
 
@@ -209,16 +212,20 @@ public class FloatingViewService extends Service {
         listener = new RecognitionListener() {
             @Override
             public void onResults(Bundle results) {
+                int i=0;
                 ArrayList<String> voiceResults = results
                         .getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                float[] confidenceResults = results.getFloatArray(SpeechRecognizer.CONFIDENCE_SCORES);
                 if (voiceResults == null) {
                     Log.e(TAG, "No voice results");
                 } else {
                     Log.d(TAG, "Printing matches: ");
                     for (String match : voiceResults) {
-                        Log.d(TAG, match);
+                        Log.d(TAG, match + ", " + confidenceResults[i++]);
                     }
                 }
+                if(voiceResults.get(0).contains("call someone random"))
+                    callManager.makeCall(FloatingViewService.this);
             }
 
             @Override
