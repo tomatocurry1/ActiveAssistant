@@ -7,8 +7,12 @@ import android.graphics.Point;
 import android.os.Build;
 import android.os.Build.VERSION;
 import android.os.Build.VERSION_CODES;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
+import android.speech.RecognitionListener;
+import android.speech.RecognizerIntent;
+import android.speech.SpeechRecognizer;
 import android.support.annotation.Nullable;
 import android.util.DisplayMetrics;
 import android.util.Log;
@@ -20,6 +24,12 @@ import android.view.View;
 import android.view.WindowManager;
 import android.view.WindowManager.LayoutParams;
 import android.view.animation.AccelerateInterpolator;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import java.util.ArrayList;
+
+import static android.content.ContentValues.TAG;
 
 public class FloatingViewService extends Service {
     private final Handler handler = new Handler();
@@ -32,6 +42,9 @@ public class FloatingViewService extends Service {
     public long gravityLastTime;
     public DisplayMetrics displayMetrics;
     public int squareHeightPixel;
+    private Intent speechIntent;
+    private SpeechRecognizer recognizer;
+    private RecognitionListener listener;
 
 
     class GravityController  implements Runnable{
@@ -127,21 +140,16 @@ public class FloatingViewService extends Service {
                             params.y = displayMetrics.heightPixels - squareHeightPixel;
                         }
 
-//
-//                        int Xdiff = (int) (event.getRawX() - initialTouchX);
-//                        int Ydiff = (int) (event.getRawY() - initialTouchY);
-//
-//                        //The check for Xdiff <10 && YDiff< 10 because sometime elements moves a little while clicking.
-//                        //So that is click event.
-//                        if (Xdiff < 10 && Ydiff < 10) {
-//                            if (isViewCollapsed()) {
-//                                //When user clicks on the image view of the collapsed layout,
-//                                //visibility of the collapsed layout will be changed to "View.GONE"
-//                                //and expanded view will become visible.
-//                                collapsedView.setVisibility(View.GONE);
-//                                expandedView.setVisibility(View.VISIBLE);
-//                            }
-//                        }
+                        int Xdiff = Math.abs((int) (event.getRawX() - initialTouchX));
+                        int Ydiff = Math.abs((int) (event.getRawY() - initialTouchY));
+
+                        //The check for Xdiff <10 && YDiff< 10 because sometime elements moves a little while clicking.
+                        //So this is click event.
+                        if (Xdiff < 10 && Ydiff < 10) {
+                            Toast.makeText(FloatingViewService.this,"Listening for Commands " + Xdiff + "," + Ydiff, Toast.LENGTH_SHORT).show();
+                            startListening();
+                        }
+
                         return true;
                     case MotionEvent.ACTION_MOVE:
 
@@ -158,6 +166,8 @@ public class FloatingViewService extends Service {
             }
 
         });
+
+        initSpeechToText();
 
         handler.post(gravityRunner);
 
@@ -187,7 +197,86 @@ public class FloatingViewService extends Service {
         handler.postDelayed(gravityRunner, 16);
     }
 
+    private void initSpeechToText(){
+        speechIntent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+        speechIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+        speechIntent.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, "com.tomatocurry1.active_assistant");
 
+
+
+        recognizer = SpeechRecognizer
+                .createSpeechRecognizer(this.getApplicationContext());
+        listener = new RecognitionListener() {
+            @Override
+            public void onResults(Bundle results) {
+                ArrayList<String> voiceResults = results
+                        .getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                if (voiceResults == null) {
+                    Log.e(TAG, "No voice results");
+                } else {
+                    Log.d(TAG, "Printing matches: ");
+                    for (String match : voiceResults) {
+                        Log.d(TAG, match);
+                    }
+                }
+            }
+
+            @Override
+            public void onReadyForSpeech(Bundle params) {
+                Log.d(TAG, "Ready for speech");
+                ((TextView)mFloatingView.findViewById(R.id.assistant_text)).setText("What's up?");
+            }
+
+            @Override
+            public void onError(int error) {
+                Log.d(TAG,
+                        "Error listening for speech: " + error);
+
+            }
+
+            @Override
+            public void onBeginningOfSpeech() {
+                Log.d(TAG, "Speech starting");
+            }
+
+            @Override
+            public void onBufferReceived(byte[] buffer) {
+                // TODO Auto-generated method stub
+
+            }
+
+            @Override
+            public void onEndOfSpeech() {
+                // TODO Auto-generated method stub
+                ((TextView)mFloatingView.findViewById(R.id.assistant_text)).setText("");
+            }
+
+            @Override
+            public void onEvent(int eventType, Bundle params) {
+                // TODO Auto-generated method stub
+
+            }
+
+            @Override
+            public void onPartialResults(Bundle partialResults) {
+                // TODO Auto-generated method stub
+
+            }
+
+            @Override
+            public void onRmsChanged(float rmsdB) {
+                // TODO Auto-generated method stub
+
+            }
+        };
+
+        recognizer.setRecognitionListener(listener);
+
+    }
+
+    private void startListening(){
+        recognizer.startListening(speechIntent);
+    }
 
     @Override
     public void onDestroy() {
