@@ -5,7 +5,6 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
-    android:background="@color/colorAccent"
     android:id="@+id/frame_container">
 
     <RelativeLayout
@@ -16,9 +15,16 @@
         <LinearLayout
             android:layout_width="100dp"
             android:layout_height="100dp"
-            android:background="@color/colorPrimary"
             app:layout_constrainedHeight="false"
-            app:layout_constrainedWidth="false"></LinearLayout>
+            app:layout_constrainedWidth="false">
+
+            <ImageView
+                android:id="@+id/image_view"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                app:srcCompat="@drawable/shime1" />
+        </LinearLayout>
+
 
     </RelativeLayout>
 

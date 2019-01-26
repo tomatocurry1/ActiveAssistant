@@ -2,8 +2,11 @@ package com.tomatocurry1.active_assistant;
 
 import android.app.Service;
 import android.content.Intent;
+import android.graphics.BitmapFactory;
 import android.graphics.PixelFormat;
 import android.graphics.Point;
+import android.graphics.drawable.Drawable;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Build.VERSION;
 import android.os.Build.VERSION_CODES;
@@ -24,6 +27,7 @@ import android.view.View;
 import android.view.WindowManager;
 import android.view.WindowManager.LayoutParams;
 import android.view.animation.AccelerateInterpolator;
+import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -34,9 +38,9 @@ import static android.content.ContentValues.TAG;
 public class FloatingViewService extends Service {
     private final Handler handler = new Handler();
     private final Runnable gravityRunner = new GravityController();
-    private WindowManager mWindowManager;
+    public WindowManager mWindowManager;
     public WindowManager.LayoutParams params;
-    private View mFloatingView;
+    public View mFloatingView;
     public boolean isHeld = true;
     public double gravityTimeElapsed;
     public long gravityLastTime;
@@ -46,6 +50,7 @@ public class FloatingViewService extends Service {
     private SpeechRecognizer recognizer;
     private RecognitionListener listener;
     private CallManager callManager = new CallManager();
+    public AssistantAnimationController animationController;
 
 
     class GravityController  implements Runnable{
@@ -77,6 +82,7 @@ public class FloatingViewService extends Service {
 
 
 
+
         //TYPE_APPLICATION_OVERLAY is for api ver 26 (oreo) and up
         if(VERSION.SDK_INT >= VERSION_CODES.O)
             params = new WindowManager.LayoutParams(
@@ -99,6 +105,11 @@ public class FloatingViewService extends Service {
         mWindowManager.addView(mFloatingView, params);
 
         this.handler.post(this.gravityRunner);
+
+
+
+        animationController = new AssistantAnimationController(this, ((ImageView) mFloatingView.findViewById(R.id.image_view)), params);
+
 
         //dragging the object around
         mFloatingView.findViewById(R.id.root_container).setOnTouchListener(new View.OnTouchListener(){
@@ -128,7 +139,7 @@ public class FloatingViewService extends Service {
                         isHeld = false;
                         gravityTimeElapsed = 0;
                         gravityLastTime = -1;
-                        Log.println(Log.INFO, "movement coords", "init: " + initialX + ", " + initialTouchY + "; init_touch: " + initialTouchX + ", " + initialTouchY);
+                        Log.println(Log.INFO, "movement coord", "init: " + initialX + ", " + initialTouchY + "; init_touch: " + initialTouchX + ", " + initialTouchY);
 
                         if (params.x < 0){
                             params.x = 0;
@@ -193,6 +204,10 @@ public class FloatingViewService extends Service {
             mWindowManager.updateViewLayout(mFloatingView, params);
             Log.println(Log.INFO,"gravity logs",  (int)((386.0885827*displayMetrics.ydpi)*gravityTimeElapsed/1000.0) + "speed " + gravityTimeElapsed);
 
+        }
+        else if(!isHeld){
+            if(animationController.animationQueue.size() == 0)
+                animationController.walk();
         }
         handler.removeCallbacks(gravityRunner);
         handler.postDelayed(gravityRunner, 16);
