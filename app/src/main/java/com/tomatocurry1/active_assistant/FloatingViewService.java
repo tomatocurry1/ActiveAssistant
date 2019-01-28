@@ -21,14 +21,12 @@ import android.speech.SpeechRecognizer;
 import android.support.annotation.Nullable;
 import android.util.DisplayMetrics;
 import android.util.Log;
-import android.view.Display;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.view.WindowManager.LayoutParams;
-import android.view.animation.AccelerateInterpolator;
 import android.widget.ProgressBar;
 import android.widget.ImageView;
 import android.widget.TextView;
@@ -44,6 +42,9 @@ public class FloatingViewService extends Service {
     private WindowManager mWindowManager;
     public WindowManager.LayoutParams params;
     private View mFloatingView;
+    private WindowManager.LayoutParams textBubbleParams;
+    private View mTextBubbleView;
+
     public boolean isHeld = true;
     public double gravityTimeElapsed;
     public long gravityLastTime;
@@ -55,6 +56,7 @@ public class FloatingViewService extends Service {
     private CallManager callManager = new CallManager();
     public AssistantAnimationController animationController;
     private TextView textBubble;
+    private View textBubbleWrapper;
     private CancellationSignal callCancellationSignal;
     private ProgressBar progressBar;
 
@@ -79,32 +81,50 @@ public class FloatingViewService extends Service {
         displayMetrics  = getResources().getDisplayMetrics();
         squareHeightPixel =  (int) (100 * getResources().getDisplayMetrics().density + 0.5f);
 
-        mFloatingView = LayoutInflater.from(this).inflate(R.layout.bubble_layout, null);
+        mFloatingView = LayoutInflater.from(this).inflate(R.layout.assistant_layout, null);
 
+        mTextBubbleView = LayoutInflater.from(this).inflate(R.layout.textbubble_layout, null);
 
 
         //TYPE_APPLICATION_OVERLAY is for api ver 26 (oreo) and up
-        if(VERSION.SDK_INT >= VERSION_CODES.O)
+        if(VERSION.SDK_INT >= VERSION_CODES.O) {
             params = new WindowManager.LayoutParams(
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                LayoutParams.TYPE_APPLICATION_OVERLAY,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
-                PixelFormat.TRANSLUCENT);
-        else
+                    WindowManager.LayoutParams.WRAP_CONTENT,
+                    WindowManager.LayoutParams.WRAP_CONTENT,
+                    LayoutParams.TYPE_APPLICATION_OVERLAY,
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                    PixelFormat.TRANSLUCENT);
+            textBubbleParams = new WindowManager.LayoutParams(
+                    WindowManager.LayoutParams.WRAP_CONTENT,
+                    WindowManager.LayoutParams.WRAP_CONTENT,
+                    LayoutParams.TYPE_APPLICATION_OVERLAY,
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                    PixelFormat.TRANSLUCENT);
+        }
+        else {
             params = new WindowManager.LayoutParams(
                     WindowManager.LayoutParams.WRAP_CONTENT,
                     WindowManager.LayoutParams.WRAP_CONTENT,
                     LayoutParams.TYPE_PHONE,
                     WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
                     PixelFormat.TRANSLUCENT);
+            textBubbleParams = new WindowManager.LayoutParams(
+                    WindowManager.LayoutParams.WRAP_CONTENT,
+                    WindowManager.LayoutParams.WRAP_CONTENT,
+                    LayoutParams.TYPE_PHONE,
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                    PixelFormat.TRANSLUCENT);
+        }
 
         params.gravity = Gravity.TOP | Gravity.LEFT;
+        textBubbleParams.gravity = Gravity.TOP | Gravity.LEFT;
 
         mWindowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
         mWindowManager.addView(mFloatingView, params);
+        mWindowManager.addView(mTextBubbleView, textBubbleParams);
 
-        progressBar = mFloatingView.findViewById(R.id.text_progress_cancel);
+        progressBar = mTextBubbleView.findViewById(R.id.text_progress_cancel);
+
 
         //this.handler.post(this.gravityRunner);
 
@@ -160,12 +180,18 @@ public class FloatingViewService extends Service {
                         //The check for Xdiff <10 && YDiff< 10 because sometime elements moves a little while clicking.
                         //So this is click event.
                         if (Xdiff < 10 && Ydiff < 10) {
+                            v.performClick();
                             Toast.makeText(FloatingViewService.this,"Listening for Commands " + Xdiff + "," + Ydiff, Toast.LENGTH_SHORT).show();
                             startListening();
                         }
 
                         return true;
                     case MotionEvent.ACTION_MOVE:
+
+
+                        mTextBubbleView.setVisibility(View.INVISIBLE);
+                        if(callCancellationSignal!=null)
+                            callCancellationSignal.cancel();
 
                         //Calculate the X and Y coordinates of the view.
                         params.x = initialX + (int) (event.getRawX() - initialTouchX);
@@ -181,7 +207,8 @@ public class FloatingViewService extends Service {
 
         });
 
-        textBubble = mFloatingView.findViewById(R.id.assistant_text);
+        textBubble = mTextBubbleView.findViewById(R.id.assistant_text);
+        textBubbleWrapper = mTextBubbleView.findViewById(R.id.textbubble_wrapper);
 
         initSpeechToText();
 
@@ -246,21 +273,26 @@ public class FloatingViewService extends Service {
                 }
                 if(voiceResults.get(0).contains("call")) {
                     callCancellationSignal = new CancellationSignal();
-                    callManager.readyCall(FloatingViewService.this, voiceResults.get(0).substring(5), callCancellationSignal);
-                    displaySpeechBubble("Starting a call to: " + voiceResults.get(0).substring(5));
-                    assignSpeechBubbleCancel(callCancellationSignal);
+                    if (callManager.readyCall(FloatingViewService.this, voiceResults.get(0).substring(5), callCancellationSignal)){
+                        displaySpeechBubble("Starting a call to: " + voiceResults.get(0).substring(5));
+                        assignSpeechBubbleCancel(callCancellationSignal);
+                    }else{
+                        displaySpeechBubble("No contact was found");
+                    }
                 }
             }
 
             @Override
             public void onReadyForSpeech(Bundle params) {
+                if(callCancellationSignal != null)
+                    callCancellationSignal.cancel();
                 Log.d(TAG, "Ready for speech");
                 View box = mFloatingView.findViewById(R.id.root_container);
 
                 float x = box.getTranslationX();
                 float y = box.getTranslationY();
 
-                ((TextView)mFloatingView.findViewById(R.id.assistant_text)).setText("What's up?");
+                ((TextView)mTextBubbleView.findViewById(R.id.assistant_text)).setText("What's up?");
                 Log.println(Log.INFO, "nvm", x + ", " + y + " | " + box.getTranslationX() + ", " + box.getTranslationY());
 
             }
@@ -317,7 +349,10 @@ public class FloatingViewService extends Service {
     }
 
     private void displaySpeechBubble(String text){
-        textBubble.setText(text + " - lorem ipsum extra text");
+        mTextBubbleView.setVisibility(View.VISIBLE);
+        textBubble.setText(text + " - longer progressbar");
+        textBubbleParams.y = params.y - mTextBubbleView.getHeight();
+        mWindowManager.updateViewLayout(mTextBubbleView, textBubbleParams);
     }
 
     private void assignSpeechBubbleCancel(final CancellationSignal cancel){
@@ -339,11 +374,12 @@ public class FloatingViewService extends Service {
         };
 
 
-        textBubble.setOnClickListener(new View.OnClickListener() {
+        textBubbleWrapper.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
                 cancel.cancel();
                 displaySpeechBubble("call cancelled");
+                Log.println(Log.INFO,"bubble click", "cancel");
             }
         });
 
@@ -356,5 +392,6 @@ public class FloatingViewService extends Service {
     public void onDestroy() {
         super.onDestroy();
         if (mFloatingView != null) mWindowManager.removeView(mFloatingView);
+        if (mTextBubbleView != null) mWindowManager.removeView(mTextBubbleView);
     }
 }
