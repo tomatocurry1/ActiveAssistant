@@ -11,6 +11,8 @@ import android.os.Build;
 import android.os.Build.VERSION;
 import android.os.Build.VERSION_CODES;
 import android.os.Bundle;
+import android.os.CancellationSignal;
+import android.os.CountDownTimer;
 import android.os.Handler;
 import android.os.IBinder;
 import android.speech.RecognitionListener;
@@ -27,6 +29,7 @@ import android.view.View;
 import android.view.WindowManager;
 import android.view.WindowManager.LayoutParams;
 import android.view.animation.AccelerateInterpolator;
+import android.widget.ProgressBar;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -38,9 +41,9 @@ import static android.content.ContentValues.TAG;
 public class FloatingViewService extends Service {
     private final Handler handler = new Handler();
     private final Runnable gravityRunner = new GravityController();
-    public WindowManager mWindowManager;
+    private WindowManager mWindowManager;
     public WindowManager.LayoutParams params;
-    public View mFloatingView;
+    private View mFloatingView;
     public boolean isHeld = true;
     public double gravityTimeElapsed;
     public long gravityLastTime;
@@ -51,14 +54,12 @@ public class FloatingViewService extends Service {
     private RecognitionListener listener;
     private CallManager callManager = new CallManager();
     public AssistantAnimationController animationController;
+    private TextView textBubble;
+    private CancellationSignal callCancellationSignal;
+    private ProgressBar progressBar;
 
 
     class GravityController  implements Runnable{
-
-
-
-        GravityController(){
-        }
 
         @Override
         public void run() {
@@ -79,7 +80,6 @@ public class FloatingViewService extends Service {
         squareHeightPixel =  (int) (100 * getResources().getDisplayMetrics().density + 0.5f);
 
         mFloatingView = LayoutInflater.from(this).inflate(R.layout.bubble_layout, null);
-
 
 
 
@@ -104,7 +104,9 @@ public class FloatingViewService extends Service {
         mWindowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
         mWindowManager.addView(mFloatingView, params);
 
-        this.handler.post(this.gravityRunner);
+        progressBar = mFloatingView.findViewById(R.id.text_progress_cancel);
+
+        //this.handler.post(this.gravityRunner);
 
 
 
@@ -179,6 +181,8 @@ public class FloatingViewService extends Service {
 
         });
 
+        textBubble = mFloatingView.findViewById(R.id.assistant_text);
+
         initSpeechToText();
 
         handler.post(gravityRunner);
@@ -186,6 +190,7 @@ public class FloatingViewService extends Service {
     }
 
     public void drawGravity(){
+
         if(!isHeld && params.y < displayMetrics.heightPixels - squareHeightPixel){
 
 
@@ -239,14 +244,25 @@ public class FloatingViewService extends Service {
                         Log.d(TAG, match + ", " + confidenceResults[i++]);
                     }
                 }
-                if(voiceResults.get(0).contains("call someone random"))
-                    callManager.makeCall(FloatingViewService.this);
+                if(voiceResults.get(0).contains("call")) {
+                    callCancellationSignal = new CancellationSignal();
+                    callManager.readyCall(FloatingViewService.this, voiceResults.get(0).substring(5), callCancellationSignal);
+                    displaySpeechBubble("Starting a call to: " + voiceResults.get(0).substring(5));
+                    assignSpeechBubbleCancel(callCancellationSignal);
+                }
             }
 
             @Override
             public void onReadyForSpeech(Bundle params) {
                 Log.d(TAG, "Ready for speech");
+                View box = mFloatingView.findViewById(R.id.root_container);
+
+                float x = box.getTranslationX();
+                float y = box.getTranslationY();
+
                 ((TextView)mFloatingView.findViewById(R.id.assistant_text)).setText("What's up?");
+                Log.println(Log.INFO, "nvm", x + ", " + y + " | " + box.getTranslationX() + ", " + box.getTranslationY());
+
             }
 
             @Override
@@ -270,7 +286,7 @@ public class FloatingViewService extends Service {
             @Override
             public void onEndOfSpeech() {
                 // TODO Auto-generated method stub
-                ((TextView)mFloatingView.findViewById(R.id.assistant_text)).setText("");
+                //((TextView)mFloatingView.findViewById(R.id.assistant_text)).setText("");
             }
 
             @Override
@@ -298,6 +314,42 @@ public class FloatingViewService extends Service {
 
     private void startListening(){
         recognizer.startListening(speechIntent);
+    }
+
+    private void displaySpeechBubble(String text){
+        textBubble.setText(text + " - lorem ipsum extra text");
+    }
+
+    private void assignSpeechBubbleCancel(final CancellationSignal cancel){
+        CountDownTimer countDownTimer = new CountDownTimer(5000, 500) {
+            @Override
+            public void onTick(long l) {
+                if(callCancellationSignal.isCanceled()){
+                    progressBar.setProgress(0);
+                    cancel();
+
+                }
+                progressBar.setProgress((int)(100*l/5000));
+            }
+
+            @Override
+            public void onFinish() {
+                progressBar.setProgress(0);
+            }
+        };
+
+
+        textBubble.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                cancel.cancel();
+                displaySpeechBubble("call cancelled");
+            }
+        });
+
+        countDownTimer.start();
+
+
     }
 
     @Override
