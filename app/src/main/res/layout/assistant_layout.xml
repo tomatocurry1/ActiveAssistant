@@ -9,17 +9,6 @@
     android:id="@+id/frame_container"
     android:orientation="vertical">
 
-    <TextView
-        android:id="@+id/assistant_text"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:background="@android:color/white"
-        android:text=""/>
-    <ProgressBar
-        android:id="@+id/text_progress_cancel"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        style="@android:style/Widget.Material.Light.ProgressBar.Horizontal"/>
 
     <RelativeLayout
         android:id="@+id/root_container"

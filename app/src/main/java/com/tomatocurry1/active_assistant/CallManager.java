@@ -23,8 +23,8 @@ public class CallManager {
 
     class CallRunner implements Runnable{
 
-        String phoneNumber;
-        CancellationSignal cancellationSignal;
+        private final String phoneNumber;
+        private final CancellationSignal cancellationSignal;
 
         private CallRunner(String number, CancellationSignal cancel){
             phoneNumber = number;
@@ -34,11 +34,10 @@ public class CallManager {
         @Override
         public void run() {
             if (phoneNumber!=null && !cancellationSignal.isCanceled()){
-                String temp = phoneNumber;
-                phoneNumber = null;
+
                 Intent intent = new Intent(Intent.ACTION_CALL);
 
-                intent.setData(Uri.parse("tel:" + temp));
+                intent.setData(Uri.parse("tel:" + phoneNumber));
                 try {
                     parentContext.startActivity(intent);
                 }catch (SecurityException e){
@@ -51,10 +50,10 @@ public class CallManager {
         }
     }
 
-    public void readyCall(Context context, String callName, CancellationSignal cancellationSignal){
+    public boolean readyCall(Context context, String callName, CancellationSignal cancellationSignal){
         parentContext = context;
         if (Build.VERSION.SDK_INT < 26)
-            return;
+            return false;
 
         contentResolver = context.getContentResolver();
 
@@ -75,13 +74,15 @@ public class CallManager {
                     }
                 }
             }
+            cursor.close();
         }
 
         if(phoneNumber == null)
-            return;
-        cursor.close();
+            return false;
+
         handler.postDelayed(new CallRunner(phoneNumber, cancellationSignal), 5000);
 
 
+        return true;
     }
 }
