@@ -1,4 +1,4 @@
-package com.tomatocurry1.active_assistant;
+package com.tomatocurry1.active_assistant.voice_manager;
 
 import android.content.Context;
 import android.content.Intent;
@@ -29,6 +29,7 @@ public class CallManager {
         private CallRunner(String number, CancellationSignal cancel){
             phoneNumber = number;
             cancellationSignal = cancel;
+
         }
 
         @Override
@@ -80,7 +81,18 @@ public class CallManager {
         if(phoneNumber == null)
             return false;
 
-        handler.postDelayed(new CallRunner(phoneNumber, cancellationSignal), 5000);
+        final CallRunner runner = new CallRunner(phoneNumber, cancellationSignal);
+        handler.postDelayed(runner, 5000);
+
+
+
+        //Not sure if this is necessary. Perhaps it would be preferable to see the runner run a cancel method?
+        cancellationSignal.setOnCancelListener(new CancellationSignal.OnCancelListener() {
+            @Override
+            public void onCancel() {
+                handler.removeCallbacks(runner);
+            }
+        });
 
 
         return true;

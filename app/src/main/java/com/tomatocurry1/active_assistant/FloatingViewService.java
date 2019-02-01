@@ -10,6 +10,7 @@ import android.os.CancellationSignal;
 import android.os.CountDownTimer;
 import android.os.Handler;
 import android.os.IBinder;
+import android.os.SystemClock;
 import android.speech.RecognitionListener;
 import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
@@ -26,6 +27,9 @@ import android.widget.ProgressBar;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import com.tomatocurry1.active_assistant.voice_manager.CallManager;
+import com.tomatocurry1.active_assistant.voice_manager.VoiceIntentManager;
 
 import com.tomatocurry1.active_assistant.animations.AssistantAnimationController;
 
@@ -51,11 +55,15 @@ public class FloatingViewService extends Service {
     private SpeechRecognizer recognizer;
     private RecognitionListener listener;
     private CallManager callManager = new CallManager();
+    private VoiceIntentManager voiceIntentManager;
     public AssistantAnimationController animationController;
     private TextView textBubble;
     private View textBubbleWrapper;
-    private CancellationSignal callCancellationSignal;
+    private CancellationSignal intentCancellationSignal;
     private ProgressBar progressBar;
+    private final BubbleDisplayTimer bubbleDisplayTimer = new BubbleDisplayTimer();
+    public boolean isListening = false;
+
 
 
     class GravityController  implements Runnable{
@@ -63,6 +71,15 @@ public class FloatingViewService extends Service {
         @Override
         public void run() {
             FloatingViewService.this.drawGravity();
+        }
+    }
+
+
+    class BubbleDisplayTimer implements Runnable{
+        @Override
+        public void run() {
+            mTextBubbleView.setVisibility(View.INVISIBLE);
+            Log.println(Log.INFO, "bubbledisplay", SystemClock.uptimeMillis() + " run");
         }
     }
 
@@ -184,11 +201,14 @@ public class FloatingViewService extends Service {
 
                         return true;
                     case MotionEvent.ACTION_MOVE:
-
+                        if(isListening){
+                            recognizer.stopListening();
+                            isListening = false;
+                        }
 
                         mTextBubbleView.setVisibility(View.INVISIBLE);
-                        if(callCancellationSignal!=null)
-                            callCancellationSignal.cancel();
+                        if(intentCancellationSignal !=null)
+                            intentCancellationSignal.cancel();
 
                         //Calculate the X and Y coordinates of the view.
                         params.x = initialX + (int) (event.getRawX() - initialTouchX);
@@ -206,6 +226,8 @@ public class FloatingViewService extends Service {
 
         textBubble = mTextBubbleView.findViewById(R.id.assistant_text);
         textBubbleWrapper = mTextBubbleView.findViewById(R.id.textbubble_wrapper);
+
+        voiceIntentManager = new VoiceIntentManager(this);
 
         initSpeechToText();
 
@@ -268,36 +290,38 @@ public class FloatingViewService extends Service {
                         Log.d(TAG, match + ", " + confidenceResults[i++]);
                     }
                 }
-                if(voiceResults.get(0).contains("call")) {
-                    callCancellationSignal = new CancellationSignal();
-                    if (callManager.readyCall(FloatingViewService.this, voiceResults.get(0).substring(5), callCancellationSignal)){
-                        displaySpeechBubble("Starting a call to: " + voiceResults.get(0).substring(5));
-                        assignSpeechBubbleCancel(callCancellationSignal);
-                    }else{
-                        displaySpeechBubble("No contact was found");
-                    }
+                switch (voiceIntentManager.detectIntents(voiceResults.get(0))){
+                    case CALL:
+                        setIntentCancellationSignal(new CancellationSignal());
+                        if (callManager.readyCall(FloatingViewService.this, voiceResults.get(0).substring(5), intentCancellationSignal)){
+                            displaySpeechBubble("Starting a call to: " + voiceResults.get(0).substring(5));
+                            assignSpeechBubbleCancel(intentCancellationSignal);
+                        }else{
+                            displaySpeechBubble("No contact was found");
+                        }
+                        break;
                 }
             }
 
             @Override
             public void onReadyForSpeech(Bundle params) {
-                if(callCancellationSignal != null)
-                    callCancellationSignal.cancel();
+                if(intentCancellationSignal != null)
+                    intentCancellationSignal.cancel();
                 Log.d(TAG, "Ready for speech");
-                View box = mFloatingView.findViewById(R.id.root_container);
 
-                float x = box.getTranslationX();
-                float y = box.getTranslationY();
-
-                ((TextView)mTextBubbleView.findViewById(R.id.assistant_text)).setText("What's up?");
-                Log.println(Log.INFO, "nvm", x + ", " + y + " | " + box.getTranslationX() + ", " + box.getTranslationY());
+                displaySpeechBubble("What's up?");
+                isListening = true;
 
             }
 
             @Override
             public void onError(int error) {
+                //6 - no audio 8 - already running
                 Log.d(TAG,
                         "Error listening for speech: " + error);
+                if(error == 8){
+                    recognizer.stopListening();
+                }
 
             }
 
@@ -345,18 +369,22 @@ public class FloatingViewService extends Service {
         recognizer.startListening(speechIntent);
     }
 
-    private void displaySpeechBubble(String text){
+    public void displaySpeechBubble(String text){
         mTextBubbleView.setVisibility(View.VISIBLE);
         textBubble.setText(text + " - longer progressbar");
         textBubbleParams.y = params.y - mTextBubbleView.getHeight();
         mWindowManager.updateViewLayout(mTextBubbleView, textBubbleParams);
+        handler.removeCallbacks(bubbleDisplayTimer);
+        handler.postDelayed(bubbleDisplayTimer, 7000);
+        Log.println(Log.INFO, "bubbledisplay", SystemClock.uptimeMillis() + " post");
+
     }
 
-    private void assignSpeechBubbleCancel(final CancellationSignal cancel){
+    public void assignSpeechBubbleCancel(final CancellationSignal cancel){
         CountDownTimer countDownTimer = new CountDownTimer(5000, 500) {
             @Override
             public void onTick(long l) {
-                if(callCancellationSignal.isCanceled()){
+                if(intentCancellationSignal.isCanceled()){
                     progressBar.setProgress(0);
                     cancel();
 
@@ -385,10 +413,18 @@ public class FloatingViewService extends Service {
 
     }
 
+    public void setIntentCancellationSignal(CancellationSignal cancellationSignal) {
+        if(intentCancellationSignal != null) {
+            intentCancellationSignal.cancel();
+        }
+        intentCancellationSignal = cancellationSignal;
+    }
+
     @Override
     public void onDestroy() {
         super.onDestroy();
         if (mFloatingView != null) mWindowManager.removeView(mFloatingView);
         if (mTextBubbleView != null) mWindowManager.removeView(mTextBubbleView);
+        Log.println(Log.INFO, "death", "I'm dead boss");
     }
 }
