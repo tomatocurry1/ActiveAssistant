@@ -2,12 +2,7 @@ package com.tomatocurry1.active_assistant;
 
 import android.app.Service;
 import android.content.Intent;
-import android.graphics.BitmapFactory;
 import android.graphics.PixelFormat;
-import android.graphics.Point;
-import android.graphics.drawable.Drawable;
-import android.net.Uri;
-import android.os.Build;
 import android.os.Build.VERSION;
 import android.os.Build.VERSION_CODES;
 import android.os.Bundle;
@@ -32,6 +27,8 @@ import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.tomatocurry1.active_assistant.animations.AssistantAnimationController;
+
 import java.util.ArrayList;
 
 import static android.content.ContentValues.TAG;
@@ -39,9 +36,9 @@ import static android.content.ContentValues.TAG;
 public class FloatingViewService extends Service {
     private final Handler handler = new Handler();
     private final Runnable gravityRunner = new GravityController();
-    private WindowManager mWindowManager;
+    public WindowManager mWindowManager;
     public WindowManager.LayoutParams params;
-    private View mFloatingView;
+    public View mFloatingView;
     private WindowManager.LayoutParams textBubbleParams;
     private View mTextBubbleView;
 

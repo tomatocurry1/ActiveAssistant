@@ -1,4 +1,4 @@
-package com.tomatocurry1.active_assistant;
+package com.tomatocurry1.active_assistant.animations;
 
 import android.content.Context;
 import android.graphics.drawable.Drawable;
@@ -7,6 +7,9 @@ import android.os.Handler;
 import android.view.WindowManager;
 import android.view.WindowManager.LayoutParams;
 import android.widget.ImageView;
+
+import com.tomatocurry1.active_assistant.FloatingViewService;
+import com.tomatocurry1.active_assistant.R;
 
 import java.util.LinkedList;
 import java.util.PriorityQueue;
@@ -20,6 +23,7 @@ public class AssistantAnimationController {
     public FloatingViewService context;
     AnimationRunner animationRunner;
     LayoutParams params;
+    Drawable[] assistantSprites = new Drawable[46];
 
 
 
@@ -31,6 +35,17 @@ public class AssistantAnimationController {
         v.setImageDrawable(context.getResources().getDrawable(R.drawable.shime1));
         animationQueue = new LinkedList<>();
         animationRunner = new AnimationRunner();
+        for(int i = 0; i < assistantSprites.length; i++) {
+            try {
+                assistantSprites[i] = context.getResources().getDrawable(R.drawable.class.getField("shime" + (i + 1)).getInt(null));
+            }
+            catch (NoSuchFieldException e){
+
+            }catch(IllegalAccessException e){
+
+            }
+        }
+
     }
 
 
@@ -59,11 +74,11 @@ public class AssistantAnimationController {
     }
 
     public void walk(){
-        animationQueue.add(context.getResources().getDrawable(R.drawable.shime1));
-        animationQueue.add(context.getResources().getDrawable(R.drawable.shime2));
-        animationQueue.add(context.getResources().getDrawable(R.drawable.shime1));
-        animationQueue.add(context.getResources().getDrawable(R.drawable.shime3));
-        animationQueue.add(context.getResources().getDrawable(R.drawable.shime1));
+        animationQueue.add(assistantSprites[0]);
+        animationQueue.add(assistantSprites[1]);
+        animationQueue.add(assistantSprites[0]);
+        animationQueue.add(assistantSprites[2]);
+        animationQueue.add(assistantSprites[0]);
         handler.post(animationRunner);
     }
 
